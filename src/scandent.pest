@@ -1,0 +1,73 @@
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+
+ident_char = _{ ASCII_ALPHANUMERIC | "_" | "-" }
+ident = @{ ident_char+ }
+
+formula = { formula_n_exp ~ formula_op ~ formula_constant
+          | formula_n_exp 
+          | formula_constant }
+formula_n_exp = ${ formula_coefficient? ~ formula_n_token }
+formula_n_token = _{ "n" }
+formula_coefficient = { ASCII_DIGIT+ }
+formula_op = _{ formula_plus | formula_minus }
+formula_plus = { "+" }
+formula_minus = { "-" }
+formula_constant = ${ ASCII_DIGIT+ }
+
+string_char_double = @{ !("\"") ~ ASCII }
+string_char_single = @{ !("'") ~ ASCII }
+string_inner_double = @{ string_char_double* }
+string_inner_single = @{ string_char_single* }
+string = ${ "\"" ~ string_inner_double ~ "\""
+          | "'" ~ string_inner_single ~ "'" }
+
+axis = _{ axis_ancestor
+       | axis_parent
+       | axis_following_sibling
+       | axis_next
+       | axis_preceding_sibling
+       | axis_previous
+       | axis_descendant
+       | axis_child }
+axis_ancestor = { "/..." }
+axis_parent = { "/.." }
+axis_following_sibling = { "/>>" }
+axis_next = { "/>" }
+axis_preceding_sibling = { "/<<" }
+axis_previous = { "/<" }
+axis_descendant = { "//" }
+axis_child = { "/" }
+
+
+predicate = { no_condition | conditions }
+conditions = _{ (name_condition ~ (attr_condition | path_condition | check_condition)*)
+             | (attr_condition | path_condition | check_condition)+ }
+no_condition = { "*" }
+
+name_condition = { name }
+name = _{ qname | localname }
+localname = { ident }
+namespace = { uri | prefix }
+prefix = { ident }
+uri = { string }
+qname = _{ namespace ~ "|" ~ localname }
+
+attr_condition = { "[" ~ name_condition ~ (attr_condition_op ~ (string | ident))? ~ "]" }
+attr_condition_op = _{ op_equals
+                    | op_contains }
+op_equals = { "==" }
+op_contains = { "=" }
+
+path_condition = { "{" ~ path ~ "}" }
+
+check_condition = { ":" ~ check_function_name ~ call? }
+check_function_name = { ident }
+call = _{ "(" ~ arg_list ~ ")" }
+arg_list = _{ arg? ~ ("," ~ arg)* }
+arg = { formula | ident | string }
+
+step = { axis ~ predicate }
+
+path = _{ step+ }
+
+selector = { SOI ~ path ~ EOI }
