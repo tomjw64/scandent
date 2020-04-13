@@ -89,6 +89,8 @@ pub struct Formula {
 pub enum ArgValue {
   StringValue(String),
   FormulaValue(Formula),
+  SelectorValue(Selector),
+  PredicateValue(Predicate),
 }
 
 #[derive(Clone, Debug)]
@@ -112,6 +114,11 @@ pub struct AttributeRequirement {
 #[derive(Clone, Debug)]
 pub struct Step {
   pub axis: Axis,
+  pub predicate: Predicate,
+}
+
+#[derive(Clone, Debug)]
+pub struct Predicate {
   pub checks: Vec<CheckFunction>,
   pub paths: Vec<Selector>,
   pub attributes: Vec<AttributeRequirement>,
@@ -154,13 +161,20 @@ impl Selector {
     }
     let last_step = Step {
       axis: last_axis.inverse(),
-      checks: vec![],
-      paths: vec![],
-      attributes: vec![],
-      name: NameRequirement { localname: None, namespace: None },
+      predicate: Predicate {
+        checks: vec![],
+        paths: vec![],
+        attributes: vec![],
+        name: NameRequirement {
+          localname: None,
+          namespace: None,
+        },
+      },
     };
     inverse_steps.push(last_step);
-    Selector { steps: inverse_steps }
+    Selector {
+      steps: inverse_steps,
+    }
   }
 }
 
@@ -186,6 +200,15 @@ impl Step {
     let predicate_pair = parts
       .nth(0)
       .expect("Grammar should enforce predicate placement");
+    Ok(Step {
+      axis,
+      predicate: Predicate::from_predicate_pair(predicate_pair)?,
+    })
+  }
+}
+
+impl Predicate {
+  fn from_predicate_pair(pair: Pair<'_, Rule>) -> ScandentResult<Predicate> {
     let mut name = NameRequirement {
       localname: None,
       namespace: None,
@@ -193,7 +216,7 @@ impl Step {
     let mut checks: Vec<CheckFunction> = vec![];
     let mut paths: Vec<Selector> = vec![];
     let mut attributes: Vec<AttributeRequirement> = vec![];
-    for inner_pair in predicate_pair.into_inner() {
+    for inner_pair in pair.into_inner() {
       match inner_pair.as_rule() {
         Rule::no_condition => {}
         Rule::name_condition => name = NameRequirement::from_name_pair(inner_pair)?,
@@ -203,8 +226,7 @@ impl Step {
         unexpected => return Err(ScandentError::UnexpectedRuleError(unexpected)),
       };
     }
-    Ok(Step {
-      axis,
+    Ok(Predicate {
       checks,
       paths,
       attributes,
@@ -251,6 +273,12 @@ impl CheckFunction {
               arg_inner,
             )?)),
             Rule::ident | Rule::string => Ok(ArgValue::StringValue(extract_string(arg_inner)?)),
+            Rule::predicate => Ok(ArgValue::PredicateValue(Predicate::from_predicate_pair(
+              arg_inner,
+            )?)),
+            Rule::path_unexpanded => Ok(ArgValue::SelectorValue(Selector::from_selector_pair(
+              arg_inner,
+            )?)),
             unexpected => Err(ScandentError::UnexpectedRuleError(unexpected)),
           }
         }
@@ -458,5 +486,13 @@ mod tests {
     assert!(Selector::from_string("//div:pseudo-with-args(a, b, c)").is_ok());
     assert!(Selector::from_string("//div:pseudo-with-formula-args(2n-1, 11, n, n+22)").is_ok());
     assert!(Selector::from_string("//div:pseudo-with-string-args('hello', \"hello\")").is_ok());
+    assert!(Selector::from_string("//div:pseudo-with-path-args(//some/path, />>hello)").is_ok());
+    assert!(Selector::from_string("//div:pseudo-with-path-arg(//div:pseudo-with-path-args(//div:pseudo-with-string-args(\"string\")))").is_ok());
+    assert!(
+      Selector::from_string("//div:pseudo-with-pred-arg(%div[attr=value]{//some/path})").is_ok()
+    );
+    assert!(
+      Selector::from_string("//div:pseudo-with-pred-arg([attr=value]{//some/path})").is_err()
+    );
   }
 }

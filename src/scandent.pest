@@ -64,10 +64,11 @@ check_condition = { ":" ~ check_function_name ~ call? }
 check_function_name = { ident }
 call = _{ "(" ~ arg_list ~ ")" }
 arg_list = _{ arg? ~ ("," ~ arg)* }
-arg = { formula | ident | string }
+arg = { formula | ident | string | "%" ~ predicate | path_unexpanded }
 
 step = { axis ~ predicate }
 
 path = _{ step+ }
+path_unexpanded = { step+ }
 
 selector = { SOI ~ path ~ EOI }
